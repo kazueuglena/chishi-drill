@@ -103,6 +103,7 @@ section.view.on{display:block}
 .chip.lv2.on{background:var(--warn); border-color:var(--warn)}
 .chip.lv3.on{background:var(--ng); border-color:var(--ng)}
 .chip.sc-school.on{background:var(--info); border-color:var(--info)}
+.chip.sc-print.on{background:var(--warn); border-color:var(--warn)}
 
 /* ===== 単元ブラウザ ===== */
 .filterbar{position:sticky; top:43px; z-index:15; background:var(--bg);
@@ -135,6 +136,7 @@ section.view.on{display:block}
 .unit .src{font-size:10px; padding:1px 6px; border-radius:999px; background:var(--line2); color:var(--sub)}
 .unit .src.school{background:var(--info-soft); color:var(--info)}
 .unit .src.tb{background:var(--br-soft); color:var(--br)}
+.unit .src.print{background:var(--warn-soft); color:var(--warn)}
 .unit.done{border-color:var(--ok)}
 .unit.empty{opacity:.4; pointer-events:none}
 
@@ -149,6 +151,7 @@ section.view.on{display:block}
 .tag{font-size:11px; padding:2px 8px; border-radius:999px; background:var(--line2); color:var(--sub)}
 .tag.school{background:var(--info-soft); color:var(--info); font-weight:600}
 .tag.tb{background:var(--br-soft); color:var(--br); font-weight:600}
+.tag.print{background:var(--warn-soft); color:var(--warn); font-weight:600}
 .tag.lv1{background:var(--ok-soft); color:var(--ok)}
 .tag.lv2{background:var(--warn-soft); color:var(--warn)}
 .tag.lv3{background:var(--ng-soft); color:var(--ng)}
@@ -276,7 +279,8 @@ kbd{font-family:var(--sans); font-size:10.5px; border:1px solid var(--line); bor
     <div class="grp">
       <div class="lab">出題元</div>
       <div class="chips" id="srcChips">
-        <button class="chip sc-school on" data-src="school">学校プリント<span class="c" id="c-school"></span></button>
+        <button class="chip sc-school on" data-src="school">一問一答<span class="c" id="c-school"></span></button>
+        <button class="chip sc-print on" data-src="print">授業プリント<span class="c" id="c-print"></span></button>
         <button class="chip on" data-src="tb">教科書<span class="c" id="c-tb"></span></button>
         <button class="chip on" data-src="ext">補充<span class="c" id="c-ext"></span></button>
       </div>
@@ -395,7 +399,7 @@ function h(tag, attrs, html){
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const DAY = 86400000;
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); };
-const SRC_LABEL = {school:'学校プリント', tb:'教科書', ext:'補充'};
+const SRC_LABEL = {school:'一問一答', print:'授業プリント', tb:'教科書', ext:'補充'};
 const LV_LABEL  = ['', '基礎', '標準', '発展'];
 
 /* ---------- 全問をフラットに展開 ---------- */
@@ -409,7 +413,7 @@ const BY_ID = Object.fromEntries(ALL.map(x => [x.id, x]));
 const KEY = 'chishi-drill-v1';
 const defState = () => ({
   cards:{}, log:{},
-  scope:{ lv:[1,2,3], src:['school','tb','ext'], size:20 },
+  scope:{ lv:[1,2,3], src:['school','print','tb','ext'], size:20 },
   mode:'flip', last:null, open:{}
 });
 let ST = load();
@@ -420,7 +424,7 @@ function load(){
     const s = JSON.parse(raw), d = defState();
     const st = {...d, ...s, scope:{...d.scope, ...(s.scope||{})}};
     // 旧バージョン（地域選択方式）からの移行: 出題元に教科書を足す
-    if (st.scope.src && !st.scope.src.includes('tb')) st.scope.src = ['school','tb','ext'];
+    if (st.scope.src && !st.scope.src.includes('print')) st.scope.src = ['school','print','tb','ext'];
     delete st.scope.regions; delete st.scope.secs;
     return st;
   }catch(e){ return defState(); }
@@ -542,8 +546,9 @@ function renderCard(){
   SESS.flipped = false; SESS.answered = false;
   $('#q-tags').innerHTML =
     `<span class="tag">${esc(x.region)}</span><span class="tag">${esc(x.sec)}</span>` +
-    (x.src === 'school' ? `<span class="tag school">学校プリント</span>` :
-     x.src === 'tb' ? `<span class="tag tb">教科書 p.${x.page || '—'}</span>` : '') +
+    (x.src === 'school' ? `<span class="tag school">一問一答</span>` :
+     x.src === 'print'  ? `<span class="tag print">プリント ${x.print_no || ''}</span>` :
+     x.src === 'tb'     ? `<span class="tag tb">教科書 p.${x.page || '—'}</span>` : '') +
     (x.src === 'school' ? '' : `<span class="tag lv${x.level}">${LV_LABEL[x.level]}</span>`);
   $('#q-text').textContent = x.q;
   $('#a-text').textContent = x.a;
@@ -691,7 +696,7 @@ function refreshHome(){
 
   // 出題元の内訳
   const sb = $('#srcSummary'); sb.innerHTML = '';
-  ['school','tb','ext'].forEach(s => {
+  ['school','print','tb','ext'].forEach(s => {
     const items = ALL.filter(x => x.src === s);
     const sp = progressOf(items);
     const row = h('div', {class:'reg-row', style:'display:flex;align-items:center;gap:10px;padding:5px 0'});
@@ -720,6 +725,7 @@ function refreshHome(){
 function renderUnits(){
   [1,2,3].forEach(l => $('#c-lv'+l).textContent = ALL.filter(x=>x.level===l).length);
   $('#c-school').textContent = ALL.filter(x=>x.src==='school').length;
+  $('#c-print').textContent  = ALL.filter(x=>x.src==='print').length;
   $('#c-tb').textContent     = ALL.filter(x=>x.src==='tb').length;
   $('#c-ext').textContent    = ALL.filter(x=>x.src==='ext').length;
   $$('#lvChips .chip').forEach(b => b.classList.toggle('on', ST.scope.lv.includes(+b.dataset.lv)));
@@ -790,7 +796,8 @@ function renderList(){
       cur = key;
       frag.appendChild(h('div', {class:'meta', style:'margin-top:14px;font-weight:700;color:var(--br)'}, esc(key)));
     }
-    const badge = x.src === 'school' ? '<span class="tag school">学校</span> '
+    const badge = x.src === 'school' ? '<span class="tag school">一問一答</span> '
+                : x.src === 'print' ? `<span class="tag print">プリント ${x.print_no || ''}</span> `
                 : x.src === 'tb' ? `<span class="tag tb">教科書 p.${x.page || '—'}</span> `
                 : `<span class="tag lv${x.level}">${LV_LABEL[x.level]}</span> `;
     const d = h('div', {class:'qitem' + (MASK ? ' masked' : '')});
@@ -847,7 +854,7 @@ $('#nextBtn').addEventListener('click', nextCard);
 $('#quitBtn').addEventListener('click', () => { SESS = null; refreshHome(); go('home'); });
 $$('#gradeRow button').forEach(b => b.addEventListener('click', () => grade(+b.dataset.g)));
 
-const SIZES = [10,20,30,50,0];
+const SIZES = [20,50,100,0];
 $('#sizeBtn').addEventListener('click', () => {
   const i = SIZES.indexOf(ST.scope.size);
   ST.scope.size = SIZES[(i+1) % SIZES.length];
