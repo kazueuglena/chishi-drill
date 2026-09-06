@@ -166,6 +166,7 @@ section.view.on{display:block}
 .grades button{border:1px solid var(--line); background:var(--card); border-radius:10px;
   padding:11px 3px; font-size:13px; font-weight:600; line-height:1.35}
 .grades button small{display:block; font-size:10px; font-weight:400; color:var(--sub); margin-top:2px}
+.grades button .k{display:block; font-size:10px; font-weight:700; opacity:.55; letter-spacing:.08em; margin-bottom:2px}
 .grades button[data-g="0"]{border-color:var(--ng); color:var(--ng)}
 .grades button[data-g="1"]{border-color:var(--warn); color:var(--warn)}
 .grades button[data-g="2"]{border-color:var(--ok); color:var(--ok)}
@@ -312,10 +313,10 @@ kbd{font-family:var(--sans); font-size:10.5px; border:1px solid var(--line); bor
   <div class="choices hidden" id="choiceRow"></div>
   <button class="btn primary block" id="flipBtn" style="margin-top:12px">答えを見る</button>
   <div class="grades hidden" id="gradeRow">
-    <button data-g="0">もう一度<small>忘れた</small></button>
-    <button data-g="1">あやふや<small>迷った</small></button>
-    <button data-g="2">わかる<small>正解</small></button>
-    <button data-g="3">かんぺき<small>即答</small></button>
+    <button data-g="0"><span class="k">A</span>もう一度<small>忘れた</small></button>
+    <button data-g="1"><span class="k">S</span>あやふや<small>迷った</small></button>
+    <button data-g="2"><span class="k">D</span>わかる<small>正解</small></button>
+    <button data-g="3"><span class="k">F</span>かんぺき<small>即答</small></button>
   </div>
   <button class="btn primary block hidden" id="nextBtn" style="margin-top:12px">次へ</button>
 
@@ -590,7 +591,7 @@ function renderChoices(x){
   for (let i=opts.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [opts[i],opts[j]]=[opts[j],opts[i]]; }
   const box = $('#choiceRow'); box.innerHTML = ''; box.classList.remove('hidden');
   opts.forEach((o, i) => {
-    const b = h('button', null, `<span class="k">${i+1}</span><span>${esc(o)}</span>`);
+    const b = h('button', null, `<span class="k">${HOME_KEYS[i].toUpperCase()}</span><span>${esc(o)}</span>`);
     b.addEventListener('click', () => answerChoice(b, o === x.a, x.a));
     box.appendChild(b);
   });
@@ -908,21 +909,39 @@ $('#resetBtn').addEventListener('click', () => {
   if (!confirm('学習の進捗をすべて消す。よろしい？')) return;
   ST = defState(); save(); refreshHome(); renderStats(); toast('消した');
 });
+/* キーボード操作: 左手をホームポジション(ASDF)に置いたまま完結させる。
+   A S D F = 4段階の評価 / 4択の選択肢
+   Space・Enter・J = めくる、採点後は次へ
+   Esc = 中断（以前は S だったが ASDF と衝突するので移した）
+   1〜4 も従来どおり使える */
+const HOME_KEYS = ['a','s','d','f'];
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (!$('#v-study').classList.contains('on')) return;
-  const k = e.key;
-  if (e.code === 'Space' || k === 'Enter'){
+  const k = e.key.toLowerCase();
+
+  if (e.key === 'Escape'){ e.preventDefault(); SESS = null; refreshHome(); go('home'); return; }
+
+  if (e.code === 'Space' || e.key === 'Enter' || k === 'j'){
     e.preventDefault();
     if (ST.mode === 'choice'){ if (SESS?.answered) nextCard(); }
     else if (!SESS?.flipped) flip();
-  } else if (['1','2','3','4'].includes(k)){
-    e.preventDefault();
-    if (ST.mode === 'choice'){
-      const b = $$('#choiceRow button')[+k - 1];
-      if (b && !SESS?.answered) b.click();
-    } else grade(+k - 1);
-  } else if (k.toLowerCase() === 's'){ SESS = null; refreshHome(); go('home'); }
+    return;
+  }
+
+  // ASDF と 1〜4 を同じ位置(0〜3)に落とす
+  let i = HOME_KEYS.indexOf(k);
+  if (i < 0 && ['1','2','3','4'].includes(k)) i = +k - 1;
+  if (i < 0) return;
+  e.preventDefault();
+  if (ST.mode === 'choice'){
+    const b = $$('#choiceRow button')[i];
+    if (b && !SESS?.answered) b.click();
+  } else {
+    if (!SESS?.flipped) flip();   // 伏せたままでも押せるように、まずめくる
+    else grade(i);
+  }
 });
 
 /* ---------- 起動 ---------- */
